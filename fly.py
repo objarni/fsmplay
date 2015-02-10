@@ -35,6 +35,15 @@ Energy is internal to the fly, and Food is the world food.
 
 (also, a random number generator will determine random events, so it's
 kind of part of the state too, but let's ignore that).
+
+*** Simplification of states ***
+In a simpler model, we ignore the two "flying" states, and see them
+as transitions instead. We get:
+
+1 Resting
+2 Looking for food (flying or walking)
+3 Eating
+4 Dead
 '''
 
 import unittest
@@ -42,6 +51,7 @@ import unittest
 from statemachine import StateMachine
 import random
 
+'''
 def flying_to_rest(cargo):
     cargo.energy -= 1
     if cargo.energy == 0:
@@ -60,6 +70,7 @@ def flying_to_skin(cargo):
 
 def dead(cargo):
     pass  # End state is never executed
+'''
 
 '''
 def exploring_skin():
@@ -67,17 +78,16 @@ def exploring_skin():
 
 def resting():
     print "I'm resting on the wall."
-    
 
 def eating_on_skin():
     print "Wo-hoo, eating food!"
-    
+
 
 def dead():
     print 'Bummer, died.'
     return 'dead'
 '''
-
+'''
 def build_machine():
     m = StateMachine()
     m.add_state("flying_to_rest", flying_to_rest)
@@ -85,14 +95,102 @@ def build_machine():
     m.add_state("dead", dead, end_state=1)
     m.set_start("flying_to_rest")
     return m
+'''
 
 
-class TestFlyingToSkinState(unittest.TestCase):
+class Cargo(object):
 
-    def test_dies_if_energy_reaches_zero(self):
-        cargo = { 'energy': 1 }
-        (new_state, cargo) = flying_to_skin(cargo)
+    def __init__(self, energy):
+        self.energy = energy
+        self.food = 0
+
+    def hit_by_human(self):
+        return False
+
+
+def resting(cargo):
+    cargo.energy -= 1
+    if cargo.energy < 70:
+        return ('looking', cargo)
+    else:
+        return ('resting', cargo)
+
+
+class TestRestingState(unittest.TestCase):
+
+    def test_stays_in_resting_if_not_hungry(self):
+        # The fly is hungry if less than 70 energy units
+        cargo = Cargo(80)
+        (new_state, cargo) = resting(cargo)
+        self.assertEqual('resting', new_state)
+
+    def test_goes_to_looking_state_if_hungry(self):
+        # The fly is hungry if less than 70 energy units
+        cargo = Cargo(60)
+        (new_state, cargo) = resting(cargo)
+        self.assertEqual('looking', new_state)
+
+    def test_loses_one_energy_per_update(self):
+        # The fly is hungry if less than 70 energy units
+        cargo = Cargo(99)
+        (new_state, cargo) = resting(cargo)
+        self.assertEqual(98, cargo.energy)
+
+
+def eating(cargo):
+    cargo.energy += 5
+    cargo.food -= 5
+    if cargo.hit_by_human():
+        return ('dead', cargo)
+    else:
+        return ('resting', cargo)
+
+
+class TestEatingState(unittest.TestCase):
+
+    def setUp(self):
+        self.cargo = Cargo(100)
+
+    def test_goes_to_rest_if_full(self):
+        def full():
+            return True
+        cargo = self.cargo
+        cargo.full = full
+        (new_state, cargo) = eating(cargo)
+        self.assertEqual('resting', new_state)
+
+    def test_dies_if_hit_by_human(self):
+        cargo = self.cargo
+
+        def hit():
+            return True
+        cargo.hit_by_human = hit
+        (new_state, cargo) = eating(cargo)
         self.assertEqual('dead', new_state)
+
+    def test_energy_increases_when_eating(self):
+        cargo = self.cargo
+        cargo.energy = 60
+        (new_state, cargo) = eating(cargo)
+        self.assertEqual(65, cargo.energy)
+
+    def test_food_decreases_when_eating(self):
+        cargo = self.cargo
+        cargo.food = 65
+        (new_state, cargo) = eating(cargo)
+        self.assertEqual(60, cargo.food)
+
+'''
+    def test_keeps_eating_if_human_misses(self):
+        cargo = self.cargo
+
+        def hit():
+            return False
+        cargo.hit_by_human = hit
+        (new_state, cargo) = eating(cargo)
+        self.assertEqual('eating', new_state)
+'''
+
 
 def selftest():
     unittest.main()
@@ -100,7 +198,11 @@ def selftest():
 
 if __name__ == '__main__':
     selftest()
+    '''
     m = build_machine()
     m.run(12345)
+    '''
 
-
+# all conditions should be functions e.g. full(), hungry()
+# cargo could be a class instead of a dict for readability
+# cargo -> env or world or ...
