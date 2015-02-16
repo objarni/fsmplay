@@ -41,7 +41,7 @@ In a simpler model, we ignore the two "flying" states, and see them
 as transitions instead. We get:
 
 1 Resting
-2 Looking for food (flying or walking)
+2 Searching (flying or walking)
 3 Eating
 4 Dead
 '''
@@ -49,6 +49,8 @@ as transitions instead. We get:
 import unittest
 
 from statemachine import StateMachine
+import logging
+logging.basicConfig(level=logging.DEBUG)
 import random
 
 '''
@@ -87,15 +89,6 @@ def dead():
     print 'Bummer, died.'
     return 'dead'
 '''
-'''
-def build_machine():
-    m = StateMachine()
-    m.add_state("flying_to_rest", flying_to_rest)
-    m.add_state("flying_to_skin", flying_to_skin)
-    m.add_state("dead", dead, end_state=1)
-    m.set_start("flying_to_rest")
-    return m
-'''
 
 
 class Cargo(object):
@@ -105,14 +98,20 @@ class Cargo(object):
         self.food = 0
 
     def hit_by_human(self):
-        return False
+        return random.uniform(0, 100) > 90
+
+    def full(self):
+        return self.energy > 90
 
 
 def resting(cargo):
+    logging.debug('Resting, energy level is %d.' % cargo.energy)
     cargo.energy -= 1
     if cargo.energy < 70:
-        return ('looking', cargo)
+        logging.debug('Getting hungry, going for a snack.')
+        return ('eating', cargo)
     else:
+        logging.debug('So nice to sleep.')
         return ('resting', cargo)
 
 
@@ -128,22 +127,27 @@ class TestRestingState(unittest.TestCase):
         # The fly is hungry if less than 70 energy units
         cargo = Cargo(60)
         (new_state, cargo) = resting(cargo)
-        self.assertEqual('looking', new_state)
+        self.assertEqual('eating', new_state)
 
     def test_loses_one_energy_per_update(self):
-        # The fly is hungry if less than 70 energy units
         cargo = Cargo(99)
         (new_state, cargo) = resting(cargo)
         self.assertEqual(98, cargo.energy)
 
 
 def eating(cargo):
+    logging.debug('Eating, energy level is %d.' % cargo.energy)
     cargo.energy += 5
     cargo.food -= 5
     if cargo.hit_by_human():
+        logging.debug('Damn, hit by human!')
         return ('dead', cargo)
-    else:
+    elif cargo.full():
+        logging.debug('I am full, going for a nap.')
         return ('resting', cargo)
+    else:
+        logging.debug('Still hungry, eat more.')
+        return ('eating', cargo)
 
 
 class TestEatingState(unittest.TestCase):
@@ -180,29 +184,37 @@ class TestEatingState(unittest.TestCase):
         (new_state, cargo) = eating(cargo)
         self.assertEqual(60, cargo.food)
 
-'''
-    def test_keeps_eating_if_human_misses(self):
-        cargo = self.cargo
+    def test_keeps_eating_if_human_misses_and_not_full(self):
+        cargo = Cargo(70)
 
         def hit():
+            logging.debug('hit returning False')
             return False
         cargo.hit_by_human = hit
         (new_state, cargo) = eating(cargo)
         self.assertEqual('eating', new_state)
-'''
+
+
+def dead(cargo):
+    pass
 
 
 def selftest():
     unittest.main()
 
 
-if __name__ == '__main__':
-    selftest()
-    '''
-    m = build_machine()
-    m.run(12345)
-    '''
+def build_machine():
+    m = StateMachine()
+    m.add_state("resting", resting)
+    m.add_state("eating", eating)
+    m.add_state("dead", dead, end_state=1)
+    m.set_start("resting")
+    return m
 
-# all conditions should be functions e.g. full(), hungry()
-# cargo could be a class instead of a dict for readability
+if __name__ == '__main__':
+    # selftest()
+    m = build_machine()
+    cargo = Cargo(100)
+    m.run(cargo)
+
 # cargo -> env or world or ...
